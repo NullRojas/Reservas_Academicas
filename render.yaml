@@ -1,0 +1,50 @@
+# Blueprint de Render: API + base de datos PostgreSQL.
+# El frontend se despliega aparte en Vercel (ver README, sección "Despliegue").
+# Valida este archivo antes del primer despliegue: `render blueprints validate` (Render CLI)
+# o con el esquema público https://render.com/schema/render.yaml.json
+databases:
+  - name: academiahub-db
+    plan: free # Verifica los límites vigentes del plan gratuito (p. ej., vigencia de la base).
+    databaseName: academiahub
+    user: academiahub
+    postgresMajorVersion: '16'
+
+services:
+  - type: web
+    name: academiahub-api
+    runtime: node
+    branch: main # Producción. Para un staging, duplica el servicio con `branch: develop`.
+    plan: free # El plan gratuito puede suspender el servicio por inactividad: verifica los límites vigentes.
+    buildCommand: npm ci && npm run build -w apps/api
+    # Aplica las migraciones pendientes y arranca el servidor.
+    startCommand: npm run start:prod -w apps/api
+    healthCheckPath: /api/health
+    # Despliega solo cuando pasan los checks de GitHub Actions (.github/workflows/ci.yml).
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: academiahub-db
+          property: connectionString
+      # Valor aleatorio de 256 bits generado por Render (cumple el mínimo de 32 caracteres).
+      - key: OTP_PEPPER
+        generateValue: true
+      # URL pública del frontend en Vercel, p. ej. https://academiahub.vercel.app (varias, separadas por coma).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: ecci.edu.co
+      # Correos que reciben el rol ADMIN en su primer ingreso.
+      - key: BOOTSTRAP_ADMIN_EMAILS
+        sync: false
+      # En producción el correo debe enviarse por SMTP (SendGrid, Brevo, Resend, Gmail…).
+      - key: MAIL_TRANSPORT
+        value: smtp
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
